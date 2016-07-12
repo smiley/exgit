@@ -1,0 +1,92 @@
+#!/bin/env python
+
+import git
+import keyring
+import re
+import requests
+import webbrowser
+
+GITHUB_DETAILS_RE = re.compile("(git@github.com:|https://github.com/)(?P<user>.*)/(?P<repo>.*).git")
+
+GITHUB_URL_FORMAT = "https://github.com/{user}/{repo}"
+NEW_PR_FORMAT = "{url}/compare/master...{branch}?expand=1"
+PR_CHECK_FORMAT = "https://api.github.com/repos/{user}/{repo}/pulls"
+
+# Currently only works on Windows, due to the Credential Manager backend allowing
+# us to query only by service name. (Because no one saves multiple credential sets
+# for the same service)
+def get_github_credentials_from_keyring():
+    kr = keyring.get_keyring()
+    creds = kr._get_password("https://github.com/")
+    if creds is None:
+        return None
+    
+    return {'username': creds['UserName'],
+            'password': creds['CredentialBlob'].decode('utf-16')}
+    
+def get_github_details_from_remote(git_url):
+    results = GITHUB_DETAILS_RE.match(git_url)
+    if results is None:
+        raise ValueError()
+        
+    return results.groupdict()
+    
+def create_github_session(auth_details):
+    s = requests.Session()
+    s.auth = requests.auth.HTTPBasicAuth(auth_details['username'], auth_details['password'])
+    # Prevent HTTP connections. (Credential leakage)
+    s.adapters.pop("http://")
+    return s
+    
+def check_for_existing_pr(repo, remote_url):
+    current_name = repo.active_branch.name
+    
+    repo_details = get_github_details_from_remote(remote_url)
+    creds = get_github_credentials_from_keyring()
+    if creds is not None:
+        session = create_github_session(creds)
+        details = session.get(PR_CHECK_FORMAT.format(**repo_details), params={
+            'head': '{0}:{1}'.format(repo_details['user'], current_name)
+        })
+        if not details.ok:
+            print("Error! ({0})".format(details.status_code))
+            details.raise_for_status()
+        
+        details = details.json()
+        if len(details) == 1:
+            # A pull request exists!
+            pr = details[0]
+            return pr
+        elif len(details) > 1:
+            print("Ambiguity: More than one PR found. Giving up.")
+    else:
+        print("WARNING: You have no GitHub credentials saved. Looking for an existing PR will never work.")
+        
+    
+def main():
+    repo = git.Repo(".")
+    remote_url = repo.remote().url
+    url = GITHUB_URL_FORMAT.format(**get_github_details_from_remote(remote_url))
+    
+    current_name = repo.active_branch.name
+    pr = None
+    
+    print("Looking for an existing pull request on GitHub...")
+    pr = check_for_existing_pr(repo, remote_url)
+    if pr is not None:
+        if pr['state'] == 'open':
+            print("You have an open pull request! (#{0}) Opening it now...".format(pr['number']))
+            webbrowser.open_new_tab(pr['html_url'])
+        elif pr['state'] == 'closed':
+            print("You have an existing, but closed pull request. (#{0}) Opening it now...".format(pr['number']))
+            webbrowser.open_new_tab(pr['html_url'])
+        else:
+            # ???
+            pr = None
+    
+    if pr is None:
+        print("No existing pull request found. Redirecting you to GitHub to create one...")
+        webbrowser.open_new_tab(NEW_PR_FORMAT.format(url=url, branch=current_name))
+
+if __name__ == '__main__':
+    main()
