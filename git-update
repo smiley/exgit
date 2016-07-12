@@ -1,0 +1,38 @@
+#!/bin/sh
+
+# Update a local branch without checking it out first. (Fast-forward only)
+
+set -e
+
+HELP='usage: git update [<options>] [[<remote>] <local_branch>]
+
+    -h, --help            Show this help text and exit.
+'
+
+function show_help_and_exit {
+    echo "$HELP"
+    exit 1
+}
+
+if [ $# -eq 0 ]; then
+    echo "error: not enough arguments."
+    show_help_and_exit
+elif [ $# -eq 1 ]; then
+    if [ \( "$1" = "--help" \) -o \( "$1" = "-help" \) -o \( "$1" = "-h" \) ]; then
+        show_help_and_exit
+    fi
+    LOCAL_BRANCH="$1"
+    REMOTE_BRANCH="$LOCAL_BRANCH"
+    REMOTE="origin"
+elif [ $# -eq 2 ]; then
+    LOCAL_BRANCH="$2"
+    REMOTE_BRANCH="$LOCAL_BRANCH"
+    REMOTE="$1"
+else
+    echo "error: too many arguments."
+    show_help_and_exit
+fi
+
+_COMMAND="git fetch $REMOTE $REMOTE_BRANCH:$LOCAL_BRANCH"
+echo $_COMMAND
+$_COMMAND
