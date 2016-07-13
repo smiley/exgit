@@ -59,6 +59,8 @@ def check_for_existing_pr(repo, remote_url):
             return pr
         elif len(details) > 1:
             print("Ambiguity: More than one PR found. Giving up.")
+        else:
+            print("No existing pull request found.")
     else:
         print("WARNING: You have no GitHub credentials saved. Looking for an existing PR will never work.")
         
