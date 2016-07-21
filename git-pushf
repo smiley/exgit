@@ -1,0 +1,77 @@
+#!/bin/bash
+#
+# Force-update the current branch remotely. Our git workflow revolves around a single-branch-per-dev,
+# and you're free to squash/rewrite your branches as you please during CR/PR. This is shorthand
+# for "git push --force origin foo:foo", which we run countless times per day.
+#
+# NOTE: This is ONLY for PRIVATE repositories. You should NEVER run this on a public, open
+#       source project. What's public is public forever, and attempting to rewrite history
+#       would just mess things up further.
+#
+
+if [[ $# -gt 1 ]]
+then
+    echo "error: too many arguments"
+    exit 1
+fi
+
+if [[ $# -eq 1 ]] && [[ "$1" != "-y" ]]
+then
+    echo "error: invalid options"
+    exit 1
+fi
+
+function shouldAssertUsernameInBranch()
+{
+    [[ "`git config --bool exgit.pushf.assertUsernameInBranch`" == "true" ]]
+}
+
+function getExgitUsername()
+{
+    git config exgit.username || echo "";
+}
+
+BRANCH_NAME=$(git symbolic-ref --short HEAD)
+
+if [[ "$BRANCH_NAME" == "master" ]]
+then
+    echo "error: force-updating master is not allowed"
+    exit 3
+fi
+
+if shouldAssertUsernameInBranch;
+then
+    GIT_USERNAME="`getExgitUsername`"
+    if [[ "$GIT_USERNAME" == "" ]]
+    then
+        echo "error: username validation requires a username to be set in \"exgit.username\"."
+        exit -1
+    fi
+
+    # Assert that the branch name starts with the username. (== "owned" by the user)
+    if [[ "$BRANCH_NAME" != $GIT_USERNAME/* ]]
+    then
+        echo "error: not your branch"
+        exit 3
+    fi
+fi
+
+if [[ "$1" == "-y" ]] || [[ "$1" == "-Y" ]]
+then
+    SHOULD_PUSH="y"
+fi
+
+if [[ "$SHOULD_PUSH" == "" ]]
+then
+    read -p "Are you sure you'd like to force-update \"$BRANCH_NAME\"? [y/N] " -n 1 -r SHOULD_PUSH
+    echo    # (optional) move to a new line
+fi
+
+if [[ $SHOULD_PUSH =~ ^[Yy]$ ]]
+then
+    _CMD="git push --force origin $BRANCH_NAME:$BRANCH_NAME"
+    echo "Running: $_CMD"
+    $_CMD
+else
+    echo "Aborted"
+fi
