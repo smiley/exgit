@@ -24,6 +24,7 @@ Every command is made to be cross-platform by being written as a shell script (f
 **tl;dr:**
 - Git 2.0+
 - Python 2.7
+  - `GitPython` for all Python-based commands
   - `keyring` for `git-pull-request`
 - Any OS that runs git
   - **Temporary:** Windows-only for PR searches in `git-pull-request` (you can still create PRs, though)
