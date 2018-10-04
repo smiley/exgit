@@ -1,5 +1,4 @@
-#!/bin/env python
-
+#!/usr/bin/env python
 import git
 import keyring
 import re
@@ -7,6 +6,11 @@ import requests
 import webbrowser
 
 GITHUB_DETAILS_RE = re.compile("(git@github.com:|https://github.com/)(?P<user>.*)/(?P<repo>.*).git")
+
+GITHUB_CREDENTIAL_NAMES = [
+    "https://github.com/",
+    "git:https://github.com"
+]
 
 GITHUB_URL_FORMAT = "https://github.com/{user}/{repo}"
 NEW_PR_FORMAT = "{url}/compare/master...{branch}?expand=1"
@@ -17,7 +21,11 @@ PR_CHECK_FORMAT = "https://api.github.com/repos/{user}/{repo}/pulls"
 # for the same service)
 def get_github_credentials_from_keyring():
     kr = keyring.get_keyring()
-    creds = kr._get_password("https://github.com/")
+    for domain in GITHUB_CREDENTIAL_NAMES:
+        creds = kr._get_password(domain)
+        if creds is not None:
+            break
+    
     if creds is None:
         return None
     
